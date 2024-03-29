@@ -1,0 +1,70 @@
+archetype:
+  context-name: archetype
+  domain-name: maestros
+  current-version: v1
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:test;Mode=Oracle
+    continue-on-error: true
+  jpa:
+    properties:
+      hibernate:
+        ddl-auto: none
+        #ddl-auto: update
+        dialect: org.hibernate.dialect.H2Dialect
+  rabbitmq:
+    listener:
+      #auto-startup: false
+      direct:
+        auto-startup: false
+      simple:
+        auto-startup: false
+  # Spring Cloud Stream 3 Config
+  cloud:
+    stream:
+      # bind del publicador de eventos. Solo se materializa al se invocado
+      source: integrationEventsPublisher
+      function:
+        # Bind entre Consumer (Bean Consumer/Function) y channel (cola)
+        definition: integrationEventsConsumer
+      bindings:
+        integrationEventsPublisher-out-0:
+          destination: ${archetype.context-name}.events
+        integrationEventsConsumer-in-0:
+          # En contexto RabbitMQ, equivale a Exchange name
+          destination: ${archetype.context-name}.events
+          # En contexto RabbitMQ, equivale a Queue name
+          group: ${archetype.context-name}.${archetype.domain-name}.queue
+          consumer:
+            back-off-initial-interval: 2000
+      # Configuraciones especificas para Spring Clous Stream Rabbbit. puede ser modificado para cambiar rápidamente el broker
+      rabbit:
+        bindings:
+          integrationEventsConsumer-in-0:
+            consumer:
+              queueNameGroupOnly: true
+              # Binding Key con la la cola hará binding sobre el exchange.
+              # En protocolo AMQP tiene inferencia en como se enrutan los mensajes
+              bindingRoutingKey: ${archetype.context-name}.*.*
+          integrationEventsPublisher-out-0:
+            producer:
+              # la routing Key se incluirá en los encabezados de los mensajes e impacta en cómo sera enrutado en mensaje detro del Exchange
+              routingKeyExpression: '''${archetype.context-name}.${archetype.domain-name}.*'''
+
+feign:
+  client:
+    config:
+      #selfrestapi representa el nombre del servicio externo, en el contexto de Feign (@FeignClient(value = "......"))
+      bored-api:
+        connectTimeout: 10000
+
+cl:
+  banchile:
+    async:
+      core-pool-size: 2
+      max-pool-size: 10
+      queue-capacity: 1000
+    external-client:
+        bored-api:
+          url: https://www.boredapi.com/api/

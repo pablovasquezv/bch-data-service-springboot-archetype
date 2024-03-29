@@ -1,0 +1,1 @@
+Adaptadores deben crear modelo de su propio contexto. se reutiliza modelo de dominio por conveniencia

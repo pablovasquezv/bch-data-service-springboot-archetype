@@ -1,0 +1,105 @@
+server:
+  port: 8080
+
+# Contiene las declaraciones del nombre del contexto y del dominio del microservicio
+# que tienen un impacto directo en en Rest Endpoint y enrutamiento de mensajería asíncrona
+archetype:
+  context-name: archetype
+  domain-name: maestros
+  current-version: v1
+
+spring:
+  application:
+    name: ${project.artifactId}
+    version: ${project.version}
+    namespace: ${banchile.system.namespace}
+  datasource: 
+    url: jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=10.200.90.4)(PORT=1523)))(CONNECT_DATA=(SERVER=DEDICATED)(SID=ora9des2)))
+    driver-class-name: oracle.jdbc.OracleDriver
+    username: admora
+    password: nicholson4567
+    # Configuraciones del Connection Pool. Se recomienda mantener configuraciones a menos que sea requerido un fine-tuning
+    hikari:
+      # (Recomendado) tamaño máximo de conexiones en el pool
+      maximum-pool-size: 10
+      # numero mínimo de conexiones en el pool en reposo.
+      minimum-idle: 5
+      # maximo tiempo en ms en que una conexión puede estar en reposo. conexiones en el pool nunca bajará de minimum-idle
+      idle-timeout: 60000
+      # (Recomendado) tiempo máximo en ms de vida de una conexión. 900.000 = 15 minutos
+      max-lifetime: 900000
+      # Tiempo máximo en ms que el proceso esperará por una conexión disponible en el pool. 30.000 = 30 segundos
+      connection-timeout: 30000
+      # Tiempo máximo de vida para una conexión en reposo. 300.000 = 5 minutos
+      keepalive-time: 300000
+      # aislamiento de la transaccion para garantizar la NO lectura de datos NO comiteados
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+  jpa:
+    database-platform: org.hibernate.dialect.Oracle10gDialect
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: false
+  sleuth:
+    sampler:
+      probability: 1
+  # Spring Cloud Stream 3 Config
+  cloud:
+    stream:
+      # bind del publicador de eventos. Solo se materializa al se invocado
+      source: integrationEventsPublisher
+      function:
+        # Bind entre Consumer (Bean Consumer/Function) y channel (cola)
+        definition: integrationEventsConsumer
+      bindings:
+        integrationEventsPublisher-out-0:
+          destination: ${archetype.context-name}.events
+        integrationEventsConsumer-in-0:
+          # En contexto RabbitMQ, equivale a Exchange name
+          destination: ${archetype.context-name}.events
+          # En contexto RabbitMQ, equivale a Queue name
+          group: ${archetype.context-name}.${archetype.domain-name}.queue
+          consumer:
+            back-off-initial-interval: 2000
+      # Configuraciones especificas para Spring Clous Stream Rabbbit. puede ser modificado para cambiar rápidamente el broker
+      rabbit:
+        bindings:
+          integrationEventsConsumer-in-0:
+            consumer:
+              queueNameGroupOnly: true
+              # Binding Key con la la cola hará binding sobre el exchange.
+              # En protocolo AMQP tiene inferencia en como se enrutan los mensajes
+              bindingRoutingKey: ${archetype.context-name}.*.*
+          integrationEventsPublisher-out-0:
+            producer:
+              # la routing Key se incluirá en los encabezados de los mensajes e impacta en cómo sera enrutado en mensaje detro del Exchange
+              routingKeyExpression: '''${archetype.context-name}.${archetype.domain-name}.*'''
+
+#Configuración adicional por servicio externo. Se puede definir por ej. timeouts
+feign:
+  client:
+    config:
+      #bored-api representa el nombre del servicio externo, en el contexto de Feign (@FeignClient(value = "......"))
+      bored-api:
+        connectTimeout: 10000
+        
+# Nomenclatura para parámetros de servicios externos
+cl:
+  banchile:
+    external-client:
+        bored-api:
+          url: https://www.boredapi.com/api/
+
+
+logging:
+  level:
+    cl:
+      banchile: INFO
+    com:
+      zaxxer:
+        hikari:
+          HikariConfig: DEBUG
+          
+  
